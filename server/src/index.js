@@ -60,6 +60,10 @@ async function authUser(token) {
     );
 
     const { data, error } = await sb.auth.getUser(token);
+    if (error) {
+  console.log("SUPABASE AUTH ERROR:", error.message);
+  return null;
+}
 
     if (error || !data || !data.user) return null;
 
