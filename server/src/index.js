@@ -1,3 +1,4 @@
+
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
@@ -29,22 +30,45 @@ import {
 import { sound } from "./extras.js";
 
 const PORT = process.env.PORT || 3001;
-const ORIGIN = (process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",").map((s) => s.trim());
+
+const ORIGIN = (
+  process.env.CLIENT_ORIGIN ||
+  "https://partyverse-ashen.vercel.app"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 async function authUser(token) {
   if (!token || typeof token !== "string") return null;
+
   try {
-    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
+    const sb = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        },
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      }
+    );
+
     const { data, error } = await sb.auth.getUser(token);
+
     if (error || !data || !data.user) return null;
+
     const { data: prof } = await sb
       .from("profiles")
       .select("username, avatar_url, title, frame, xp")
       .eq("id", data.user.id)
       .single();
+
     return {
       id: data.user.id,
       name: (prof && prof.username) || "لاعب",
@@ -53,67 +77,91 @@ async function authUser(token) {
       frame: (prof && prof.frame) || "",
       xp: (prof && prof.xp) || 0
     };
+
   } catch (e) {
+    console.error("Auth error:", e);
     return null;
   }
 }
 
 const app = express();
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://partyverse-ashen.vercel.app");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
 app.use(cors({
   origin: ORIGIN,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-app.options("*", cors({
-  origin: ORIGIN,
-  credentials: true
-}));
-
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
 
 app.get("/voice-token", async (req, res) => {
   const { room, name, pid } = req.query;
-  if (!room || !name) return res.status(400).json({ error: "room and name required" });
-  try {
-    const at = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, {
-      identity: String(pid || `${name}-${Math.random().toString(36).slice(2, 7)}`),
-      name: String(name)
+
+  if (!room || !name) {
+    return res.status(400).json({
+      error: "room and name required"
     });
-    at.addGrant({ roomJoin: true, room: String(room), canPublish: true, canSubscribe: true });
-    res.json({ token: await at.toJwt(), url: process.env.LIVEKIT_URL });
+  }
+
+  try {
+    const at = new AccessToken(
+      process.env.LIVEKIT_API_KEY,
+      process.env.LIVEKIT_API_SECRET,
+      {
+        identity: String(
+          pid || `${name}-${Math.random().toString(36).slice(2, 7)}`
+        ),
+        name: String(name)
+      }
+    );
+
+    at.addGrant({
+      roomJoin: true,
+      room: String(room),
+      canPublish: true,
+      canSubscribe: true
+    });
+
+    res.json({
+      token: await at.toJwt(),
+      url: process.env.LIVEKIT_URL
+    });
+
   } catch (e) {
-    res.status(500).json({ error: "token failed" });
+    console.error("Voice token error:", e);
+
+    res.status(500).json({
+      error: "token failed"
+    });
   }
 });
 
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: ORIGIN,
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   },
   transports: ["polling", "websocket"]
 });
 
 io.on("connection", (socket) => {
+
   socket.on("join_room", async (data) => {
     data = data || {};
+
     const u = await authUser(data.token);
-    if (!u) return socket.emit("error_msg", "سجّل دخول الأول");
+
+    if (!u) {
+      return socket.emit("error_msg", "سجّل دخول الأول");
+    }
+
     joinRoom(io, socket, {
       roomId: String(data.roomId || ""),
       name: u.name,
@@ -125,6 +173,7 @@ io.on("connection", (socket) => {
       settings: data.settings
     });
   });
+
   socket.on("start_game", () => startGame(io, socket));
   socket.on("skip_phase", () => skipPhase(io, socket));
   socket.on("cast_vote", (vote) => castVote(io, socket, vote));
@@ -143,7 +192,11 @@ io.on("connection", (socket) => {
   socket.on("poll_vote", (i) => votePoll(io, socket, i));
   socket.on("poll_close", () => endPoll(io, socket));
   socket.on("sound", (id) => sound(io, socket, id));
+
   socket.on("disconnect", () => leaveRoom(io, socket));
 });
 
-server.listen(PORT, () => console.log(`Server running on :${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on :${PORT}`);
+  console.log("Allowed origins:", ORIGIN);
+});
