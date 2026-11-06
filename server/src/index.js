@@ -153,26 +153,35 @@ const io = new Server(server, {
 
 io.on("connection", (socket) => {
 
-  socket.on("join_room", async (data) => {
-    data = data || {};
+socket.on("join_room", async (data) => {
+  data = data || {};
 
-    const u = await authUser(data.token);
-
-    if (!u) {
-      return socket.emit("error_msg", "سجّل دخول الأول");
-    }
-
-    joinRoom(io, socket, {
-      roomId: String(data.roomId || ""),
-      name: u.name,
-      pid: u.id,
-      avatar: u.avatar,
-      title: u.title,
-      frame: u.frame,
-      xp: u.xp,
-      settings: data.settings
-    });
+  console.log("JOIN ROOM REQUEST:", {
+    roomId: data.roomId,
+    tokenExists: !!data.token,
+    tokenLength: data.token?.length
   });
+
+  const u = await authUser(data.token);
+
+  if (!u) {
+    console.log("JOIN ROOM REJECTED: Invalid user token");
+    return socket.emit("error_msg", "سجّل دخول الأول");
+  }
+
+  console.log("JOIN ROOM AUTH SUCCESS:", u.id);
+
+  joinRoom(io, socket, {
+    roomId: String(data.roomId || ""),
+    name: u.name,
+    pid: u.id,
+    avatar: u.avatar,
+    title: u.title,
+    frame: u.frame,
+    xp: u.xp,
+    settings: data.settings
+  });
+});
 
   socket.on("start_game", () => startGame(io, socket));
   socket.on("skip_phase", () => skipPhase(io, socket));
