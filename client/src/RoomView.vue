@@ -219,10 +219,19 @@ function join() {
   socket.on("rewards", (r: any) => {
     rewards.value = r && r[pid] ? r[pid] : null;
   });
-  socket.on("connect", async () => {
-    const { data } = await sb.auth.getSession();
-    socket!.emit("join_room", { roomId: props.roomCode, token: data.session?.access_token, settings: props.initialSettings });
+socket.on("connect", async () => {
+  const { data, error } = await sb.auth.getSession();
+
+  console.log("SESSION:", data.session);
+  console.log("SESSION ERROR:", error);
+  console.log("TOKEN EXISTS:", !!data.session?.access_token);
+
+  socket.emit("join_room", {
+    roomId: props.roomCode,
+    token: data.session?.access_token,
+    settings: props.initialSettings
   });
+});
   socket.on("state", (s: any) => {
     state.value = s;
     if (!joined.value) {
