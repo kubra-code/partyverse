@@ -88,7 +88,14 @@ app.get("/voice-token", async (req, res) => {
 });
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: ORIGIN } });
+const io = new Server(server, {
+  cors: {
+    origin: ORIGIN,
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ["polling", "websocket"]
+});
 
 io.on("connection", (socket) => {
   socket.on("join_room", async (data) => {
