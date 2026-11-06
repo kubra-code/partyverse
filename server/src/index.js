@@ -59,7 +59,16 @@ async function authUser(token) {
 }
 
 const app = express();
-app.use(cors({ origin: ORIGIN }));
+app.use(cors({
+  origin: ORIGIN,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  credentials: true
+}));
+
+app.options("*", cors({
+  origin: ORIGIN,
+  credentials: true
+}));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
